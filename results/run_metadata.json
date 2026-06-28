@@ -1,0 +1,35 @@
+{
+  "version": "0.5",
+  "equation_str": "(-7.81*Neut**2 + 61.12*Neut*Z - 24.37*(Z + 61.53)*(0.01*Z**2 - 0.09) + 1.39)/(A + 8.06)",
+  "equation_latex": "\\frac{- 7.81 N^{2} + 61.12 N Z - 24.37 \\left(Z + 61.53\\right) \\left(0.01 Z^{2} - 0.09\\right) + 1.39}{A + 8.06}",
+  "mae": {
+    "pymisr": 3.9662273631292537,
+    "misr": 66.65302964255433
+  },
+  "config": {
+    "max_train_z": 50,
+    "n_splits": 5,
+    "s": 5,
+    "n_t": 45,
+    "max_iter": 1,
+    "theta": 0.04,
+    "niterations": 40,
+    "ncycles_per_iteration": 2000,
+    "maxdepth": 12,
+    "parsimony": 0.0001,
+    "random_state": 11,
+    "binary_ops": [
+      "+",
+      "-",
+      "*",
+      "/"
+    ],
+    "unary_ops": [
+      "square",
+      "cbrt",
+      "inv"
+    ],
+    "anchor_z0": false,
+    "anchor_weight": 10.0
+  }
+}

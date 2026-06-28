@@ -26,12 +26,6 @@ $$
 
 with parameters: $a = 1.10$, $b = 32.43$, $c = 16.70$, $\eta_0 = 1.0$
 
-**PyMISR (discovered, v0.3):**
-
-$$
-BE = \frac{(7.00\,Z - 8.29)\left(\sqrt{N} + 4.40\,N - 2.14\,Z + 1.49\right)}{N}
-$$
-
 ---
 
 ## Project Structure
@@ -43,15 +37,17 @@ PyMISR/
 ├── notebooks/
 │   └── bindingEnergy.ipynb     # Interactive exploration notebook (v0.2)
 ├── results/
-│   ├── MISRComparison.png              # Main comparison figure (4 panels)
+│   ├── MISRComparison.png              # Main comparison figure (combined 2x2)
 │   ├── MISRComparison_BE_per_nucleon.png
 │   ├── MISRComparison_absolute_error.png
 │   ├── MISRComparison_residuals_N.png
 │   ├── MISRComparison_residuals_Z.png
 │   ├── MISRComparison_config.png       # Configuration parameters table
-│   └── MISRComparison_results.csv      # Z, N, BE_exp, BE_misr, BE_pymisr
+│   ├── MISRComparison_results.csv      # Z, N, BE_exp, BE_misr, BE_pymisr, residuals
+│   └── run_metadata.json              # Config + discovered equation + MAE (model -> plots)
 ├── src/
-│   └── bindingEnergy.py        # Main algorithm (v0.3, 511 lines)
+│   ├── model.py                # Stage 1: data + symbolic regression -> CSV + metadata (v0.4)
+│   └── plots.py                # Stage 2: reads CSV + metadata -> figures
 └── README.md
 ```
 
@@ -68,7 +64,6 @@ scikit-learn
 pysr
 sympy
 matplotlib
-optuna       # (imported, pending integration)
 ```
 
 **Julia 1.10+** (installed automatically by PySR via `juliacall`)
@@ -77,32 +72,66 @@ optuna       # (imported, pending integration)
 
 ## Usage
 
+The pipeline is split into two decoupled stages:
+
 ```bash
 cd PyMISR
-python src/bindingEnergy.py
+python src/model.py    # Stage 1: train + export CSV and run_metadata.json (slow, runs Julia)
+python src/plots.py    # Stage 2: read those files and render all figures (fast)
 ```
 
-The script will:
+`plots.py` only reads `results/MISRComparison_results.csv` and `results/run_metadata.json`,
+so figures can be regenerated/tweaked any number of times **without** retraining.
+
+**Stage 1 — `model.py`** will:
 1. Load and preprocess the experimental dataset
 2. Filter nuclei to Z ≤ 50 for training
 3. Run iterative symbolic regression with 5-fold cross-validation
-4. Simplify the discovered equation with SymPy
-5. Compare against the MISR1 model on all nuclei
-6. Export plots and CSV results to `results/`
+4. (Optional) Inject soft physical anchors at Z=0 (BE=0) — `anchor_z0`, **off in v0.5**
+5. Simplify the discovered equation with SymPy
+6. Compare against the MISR1 model on all nuclei
+7. Export `MISRComparison_results.csv` and `run_metadata.json` to `results/`
+
+**Stage 2 — `plots.py`** reads those outputs and exports the combined `MISRComparison.png`
+plus the individual panels and the configuration table.
+
+### Physical constraint: BE(Z=0) = 0  *(optional, `anchor_z0`)*
+
+Without protons there is no nucleus, so the binding energy should vanish at $Z=0$. PyMISR can
+enforce this as a **soft constraint** (`anchor_z0=True`): synthetic anchor points with $Z=0$,
+$BE=0$ and a high weight (`anchor_weight`) are added to each fold's PySR training set, leaving
+the equation form completely free (no structural template, so no `f(...)/Z` loophole). In v0.4
+the search converged to a form with $Z$ as a global factor, satisfying $BE(Z=0)=0$ exactly.
+
+> **v0.5 disables this** (`anchor_z0=False`). The anchors penalize MISR's divergent terms
+> ($1/N$, $N/Z^2$), so they conflict with the goal of approaching MISR — which itself diverges
+> at $Z=0$. Re-enable `anchor_z0` if you want the physical $BE(Z=0)=0$ behavior back.
 
 ---
 
 ## Results
 
-Performance on 2,443 unique nuclei (MAE in MeV):
+Performance across all nuclei (MAE in MeV):
 
-| Region | MISR (theoretical) | PyMISR (v0.3) |
+| Region | MISR (theoretical) | PyMISR (v0.5) |
 |---|---|---|
-| Z ≤ 50 (training) | 5.75 | **5.32** |
-| Z > 50 (extrapolation) | **104.71** | 107.35 |
-| **Global** | **63.15** | 64.50 |
+| Z ≤ 50 (training) | 5.31 | **2.28** |
+| Z > 50 (extrapolation) | 110.31 | **5.16** |
+| **Global** | 66.65 | **3.97** |
 
-PyMISR outperforms MISR in the training region (Z ≤ 50) but shows lower extrapolation capability to heavier nuclei..
+The v0.5 configuration (`s=5`, larger search budget, no `sqrt`, anchors off) makes PyMISR
+**outperform MISR in every region by a wide margin**, including the training region (2.28 vs
+5.31). The discovered form is `(a·N² + b·N·Z − c·(Z+…)(d·Z² − …) + …)/(A + …)`, whose
+`(Z², N·Z, N²)/A` structure echoes the Coulomb/asymmetry terms of the semi-empirical mass
+formula. Trade-off: with the anchors disabled, $BE(Z=0)=0$ is **no longer guaranteed**
+(consistent with MISR, which diverges at $Z=0$).
+
+> **⚠️ On the reported errors.** These MAE are computed from the **full-precision** PySR model
+> (`model.predict`). The discovered equation shown in `results/run_metadata.json` is rounded to
+> 2 decimals for readability and **does not reproduce these MAE on its own** — rounding small
+> coefficients (e.g. the `0.01·Z²` term, with $Z$ up to ~116) shifts the result by hundreds of
+> MeV. Treat the printed equation as the discovered functional *form*, not a plug-in formula; the
+> numbers above reflect the actual fitted model.
 
 ---
 

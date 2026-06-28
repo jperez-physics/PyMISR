@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# PySR run artifacts (checkpoints, hall of fame, temp state)
+outputs/
+**/outputs/
+*.pkl
+hall_of_fame*.csv
+hall_of_fame*.csv.bak
+
+# Notebook-generated scratch figures (canonical figures live in results/)
+notebooks/*.png
+
+# OS / editor
+.ipynb_checkpoints/
+.DS_Store
